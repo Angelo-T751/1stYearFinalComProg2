@@ -1,28 +1,63 @@
 package GUI;
 
 import com.formdev.flatlaf.FlatLightLaf;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.json.JSONTokener;
+
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.io.*;
+import java.util.Objects;
 
 public class LoginLogout {
 
     public static void main(String[] args) {
         try {
-            UIManager.setLookAndFeel(new FlatLightLaf()); // Modern FlatLaf look
+            UIManager.setLookAndFeel(new FlatDarkLaf()); // Apply modern UI theme
         } catch (Exception e) {
             e.printStackTrace();
         }
 
-        SwingUtilities.invokeLater(() -> new LoginWindow());
+        SwingUtilities.invokeLater(() -> {
+            ensureUserJsonExists();
+            new LoginWindow();
+        });
+    }
+
+    // Automatically creates the users.json file if it doesn't exist
+    private static void ensureUserJsonExists() {
+        File file = new File("users.json");
+        if (!file.exists()) {
+            try (PrintWriter writer = new PrintWriter(new FileWriter(file))) {
+                JSONObject user1 = new JSONObject();
+                user1.put("username", "admin");
+                user1.put("password", "admin123");
+
+                JSONObject user2 = new JSONObject();
+                user2.put("username", "jane");
+                user2.put("password", "doe456");
+
+                JSONArray usersArray = new JSONArray();
+                usersArray.put(user1);
+                usersArray.put(user2);
+
+                JSONObject usersJson = new JSONObject();
+                usersJson.put("users", usersArray);
+
+                writer.println(usersJson.toString(4)); // Pretty-print JSON
+                System.out.println("Created users.json with default users.");
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
     }
 }
 
 class LoginWindow extends JFrame {
 
-    private JTextField usernameField;
-    private JPasswordField passwordField;
+    private final JTextField usernameField;
+    private final JPasswordField passwordField;
 
     public LoginWindow() {
         setTitle("Login");
@@ -31,21 +66,22 @@ class LoginWindow extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setResizable(false);
 
-        // Panel
+        // Main Panel
         JPanel panel = new JPanel(new GridBagLayout());
         panel.setBorder(BorderFactory.createEmptyBorder(20, 30, 20, 30));
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(10, 0, 10, 0);
 
-        // Username
-        gbc.gridx = 0; gbc.gridy = 0;
+        // Username Label + Field
+        gbc.gridx = 0;
+        gbc.gridy = 0;
         panel.add(new JLabel("Username:"), gbc);
         gbc.gridy++;
         usernameField = new JTextField(20);
         panel.add(usernameField, gbc);
 
-        // Password
+        // Password Label + Field
         gbc.gridy++;
         panel.add(new JLabel("Password:"), gbc);
         gbc.gridy++;
@@ -63,17 +99,40 @@ class LoginWindow extends JFrame {
     }
 
     private void handleLogin() {
-        String user = usernameField.getText();
-        String pass = new String(passwordField.getPassword());
+        String username = usernameField.getText().trim();
+        String password = new String(passwordField.getPassword());
 
-        // Dummy authentication
-        if (user.equals("admin") && pass.equals("admin")) {
+        if (validateCredentials(username, password)) {
             JOptionPane.showMessageDialog(this, "Login Successful!");
-            dispose(); // Close login window
+            dispose();
             new LogoutWindow();
         } else {
             JOptionPane.showMessageDialog(this, "Invalid Credentials", "Error", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    private boolean validateCredentials(String username, String password) {
+        try (InputStream is = new FileInputStream("users.json")) {
+            JSONTokener tokener = new JSONTokener(is);
+            JSONObject obj = new JSONObject(tokener);
+            JSONArray users = obj.getJSONArray("users");
+
+            for (int i = 0; i < users.length(); i++) {
+                JSONObject userObj = users.getJSONObject(i);
+                String storedUser = userObj.getString("username");
+                String storedPass = userObj.getString("password");
+
+                if (Objects.equals(storedUser, username) && Objects.equals(storedPass, password)) {
+                    return true;
+                }
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Error reading user data", "Error", JOptionPane.ERROR_MESSAGE);
+        }
+
+        return false;
     }
 }
 
